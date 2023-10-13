@@ -9,3 +9,10 @@ const Home: React.FC = () => {
 };
 
 export default Home;
+
+export async function getStaticProps() {
+  return {
+    props: {},
+  }
+}
+
