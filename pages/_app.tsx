@@ -39,7 +39,8 @@ library.add(
   fas.faExclamationTriangle,
   fas.faTimes,
   fas.faFileCirclePlus,
-  fas.faFileArrowDown
+  fas.faFileArrowDown,
+  fas.faDownload
 );
 
 config.autoAddCss = false;

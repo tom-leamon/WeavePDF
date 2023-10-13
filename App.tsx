@@ -8,6 +8,7 @@ import {
   LoadingSpinner,
   Reorder,
   Spacer,
+  TextInput,
   reorderItems,
 } from '@avsync.live/formation';
 import { PDFDocument as PDFLibDocument } from 'pdf-lib';
@@ -28,6 +29,8 @@ interface LoadedPage {
 const Home: React.FC = () => {
   const [loadedPages, setLoadedPages] = useState<LoadedPage[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [fileName, set_fileName] = useState('')
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onChange = (
@@ -93,49 +96,74 @@ const Home: React.FC = () => {
   };
 
   const generatePDF = async () => {
-    const newPdfDoc = await PDFLibDocument.create();
+    const newPdfDoc = await PDFLibDocument.create()
     for (const { pdfDoc, index } of loadedPages) {
-      const [page] = await newPdfDoc.copyPages(pdfDoc, [index]);
-      newPdfDoc.addPage(page);
+      const [page] = await newPdfDoc.copyPages(pdfDoc, [index])
+      newPdfDoc.addPage(page)
     }
-    const modifiedPdfBytes = await newPdfDoc.save();
-    const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    window.open(url);
-  };
+    const modifiedPdfBytes = await newPdfDoc.save()
+    const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName || 'untitled.pdf'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 
   useEffect(() => {
+    const handleFileInput = async () => {
+      await loadPDFs()
+      const firstFile = fileInputRef.current?.files?.[0]
+      if (firstFile) {
+        set_fileName(`${firstFile.name.split('.')[0]} (edited)`)
+      }
+    }
+
     if (fileInputRef.current) {
-      fileInputRef.current.addEventListener('change', loadPDFs);
+      fileInputRef.current.addEventListener('change', handleFileInput)
     }
 
     return () => {
       if (fileInputRef.current) {
-        fileInputRef.current.removeEventListener('change', loadPDFs);
+        fileInputRef.current.removeEventListener('change', handleFileInput)
       }
-    };
-  }, []);
+    }
+  }, [])
 
   return (
     <div>
       <S.Header>
         <Gap>
+          <S.Logo src='weave.svg' />
           <Button
             iconPrefix="fas"
             icon="file-circle-plus"
             text="Add documents"
-            secondary
             onClick={() => fileInputRef.current!.click()}
           />
           {isLoading ? <LoadingSpinner small /> : null}
           <Spacer />
-          <Button
-            iconPrefix="fas"
-            icon="file-circle-plus"
-            text="Download"
-            secondary
-            onClick={generatePDF}
-          />
+
+          {
+            loadedPages.length > 0 &&
+              <Gap disableWrap autoWidth>
+                <TextInput
+                  value={fileName}
+                  onChange={val => set_fileName(val)}
+                  compact
+                  placeholder='Name file'
+                />
+            
+                <Button
+                  iconPrefix="fas"
+                  icon="download"
+                  onClick={generatePDF}
+                />
+              </Gap>
+          }
         </Gap>
         <input type="file" ref={fileInputRef} multiple hidden />
       </S.Header>
@@ -175,6 +203,14 @@ const Home: React.FC = () => {
             )
           )}
         </Reorder>
+              
+        {
+          (loadedPages.length == 0) &&
+            <S.LogoBackdrop>
+              <S.LogoHero src='weave.svg' />
+            </S.LogoBackdrop>
+        }
+        
       </S.Pages>
     </div>
   );
@@ -188,8 +224,24 @@ const S = {
     padding: 1rem;
     position: sticky;
     top: 0;
-    background: var(--F_Surface_0);
+    background: var(--F_Background);
     z-index: 2;
+    border-bottom: 1px solid var(--F_Surface);
+  `,
+  Logo: styled.img`
+    width: 2.85rem;
+    padding-right: .5rem;
+  `,
+  LogoBackdrop: styled.div`
+    height: 40rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: .1;
+  `,
+  LogoHero: styled.img`
+    width: 20rem;
   `,
   Pages: styled.div`
     padding: 1rem;
