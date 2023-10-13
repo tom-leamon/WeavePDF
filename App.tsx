@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import {
   AspectRatio,
+  Box,
   Button,
   Gap,
   Grid,
@@ -30,6 +31,7 @@ const Home: React.FC = () => {
   const [loadedPages, setLoadedPages] = useState<LoadedPage[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [fileName, set_fileName] = useState('')
+  const [activeTab, setActiveTab] = useState<'edit' | 'view'>('edit')
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -46,36 +48,36 @@ const Home: React.FC = () => {
   };
 
   const loadPDFs = async () => {
-    const inputFiles = fileInputRef.current?.files;
-    if (!inputFiles) return;
-
-    setIsLoading(true);
-
-    let newLoadedPages: LoadedPage[] = [];
-
+    const inputFiles = fileInputRef.current?.files
+    if (!inputFiles) return
+  
+    setIsLoading(true)
+  
+    let newLoadedPages: LoadedPage[] = []
+  
     for (let i = 0; i < inputFiles.length; i++) {
-      const pdfBytes = await inputFiles[i].arrayBuffer();
-      const pdfLibDoc = await PDFLibDocument.load(pdfBytes);
-      const pdfJsDoc = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
-      const numPages = pdfJsDoc.numPages;
-
+      const pdfBytes = await inputFiles[i].arrayBuffer()
+      const pdfLibDoc = await PDFLibDocument.load(pdfBytes)
+      const pdfJsDoc = await pdfjsLib.getDocument({ data: pdfBytes }).promise
+      const numPages = pdfJsDoc.numPages
+  
       for (let index = 1; index <= numPages; index++) {
-        const id = `file-${i}-page-${index}`;
-        const pageJs = await pdfJsDoc.getPage(index);
-        const viewport = pageJs.getViewport({ scale: 1 });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const context = canvas.getContext('2d');
-
+        const id = `file-${i}-page-${index}`
+        const pageJs = await pdfJsDoc.getPage(index)
+        const viewport = pageJs.getViewport({ scale: 1 })
+        const canvas = document.createElement('canvas')
+        canvas.width = viewport.width
+        canvas.height = viewport.height
+        const context = canvas.getContext('2d')
+  
         if (context) {
           const renderContext = {
             canvasContext: context,
             viewport: viewport,
-          };
-          await pageJs.render(renderContext).promise;
+          }
+          await pageJs.render(renderContext).promise
         }
-
+  
         newLoadedPages.push({
           pdfDoc: pdfLibDoc,
           index: index - 1,
@@ -83,14 +85,14 @@ const Home: React.FC = () => {
           canvas,
           originalFileName: inputFiles[i].name,
           originalPageNumber: index,
-        });
+        })
       }
     }
-
-    setLoadedPages(newLoadedPages);
-    setIsLoading(false);
-  };
-
+  
+    setLoadedPages(prevLoadedPages => [...prevLoadedPages, ...newLoadedPages])
+    setIsLoading(false)
+  }
+  
   const onDeletePage = (id: string) => {
     setLoadedPages((prevPages) => prevPages.filter((page) => page.id !== id));
   };
@@ -133,6 +135,45 @@ const Home: React.FC = () => {
     }
   }, [])
 
+  const [docUrl, setDocUrl] = useState('')
+
+  const updatePdfUrl = async () => {
+    const newPdfDoc = await PDFLibDocument.create()
+    for (const { pdfDoc, index } of loadedPages) {
+      const [page] = await newPdfDoc.copyPages(pdfDoc, [index])
+      newPdfDoc.addPage(page)
+    }
+    const modifiedPdfBytes = await newPdfDoc.save()
+    const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    setDocUrl(url)
+  }
+
+  useEffect(() => {
+    if ((loadedPages.length > 0) && activeTab == 'view') {
+      updatePdfUrl()
+    }
+  }, [loadedPages, activeTab])
+
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const setIframeHeight = () => {
+    if (iframeRef.current) {
+      const rect = iframeRef.current.getBoundingClientRect()
+      const windowHeight = window.innerHeight
+      const height = windowHeight - rect.top
+      iframeRef.current.style.height = `${height}px`
+    }
+  }
+
+  useEffect(() => {
+    setIframeHeight()
+    window.addEventListener('resize', setIframeHeight)
+  
+    return () => {
+      window.removeEventListener('resize', setIframeHeight)
+    }
+  }, [])
+
   return (
     <div>
       <S.Header>
@@ -143,6 +184,7 @@ const Home: React.FC = () => {
             icon="file-circle-plus"
             text="Add documents"
             onClick={() => fileInputRef.current!.click()}
+            disabled={isLoading}
           />
           {isLoading ? <LoadingSpinner small /> : null}
           <Spacer />
@@ -167,15 +209,43 @@ const Home: React.FC = () => {
         </Gap>
         <input type="file" ref={fileInputRef} multiple hidden />
       </S.Header>
+      {
+        loadedPages.length > 0 &&
+        <Box width='calc(100% - 1.5rem)' p={.75}>
+          <Box width='50%'>
+            <Button
+              text='Edit'
+              icon='edit'
+              iconPrefix='fas'
+              secondary={activeTab !== 'edit'}
+              onClick={() => setActiveTab('edit')}
+              expand
+              tab
+            />
+          </Box>
+          <Box width='50%'>
+            <Button
+              text='View'
+              icon='eye'
+              iconPrefix='fas'
+              secondary={activeTab !== 'view'}
+              onClick={() => setActiveTab('view')}
+              expand
+              tab
+            />
+          </Box>
+        </Box>
+      }
 
+      <S.Hide hide={activeTab !== 'edit'}>
       <S.Pages>
         <Reorder
           reorderId="pages"
           maxItemWidth={14}
-          gap={1}
+          gap={.75}
           onChange={onChange}
           placeholder={<S.Placeholder />}
-          holdTime={50}
+          holdTime={1}
         >
           {loadedPages.map(
             ({ id, canvas, originalFileName, originalPageNumber }, index) => (
@@ -212,6 +282,11 @@ const Home: React.FC = () => {
         }
         
       </S.Pages>
+      </S.Hide>
+
+      <S.Hide hide={activeTab !== 'view'}>
+        <S.View ref={iframeRef} src={docUrl} />
+      </S.Hide>
     </div>
   );
 };
@@ -219,9 +294,12 @@ const Home: React.FC = () => {
 export default Home;
 
 const S = {
+  Hide: styled.div<{hide: boolean}>`
+    display: ${props => props.hide ? 'none' : 'block'}
+  `,
   Header: styled.div`
-    width: calc(100% - 2rem);
-    padding: 1rem;
+    width: calc(100% - 1.5rem);
+    padding: .75rem;
     position: sticky;
     top: 0;
     background: var(--F_Background);
@@ -244,8 +322,9 @@ const S = {
     width: 20rem;
   `,
   Pages: styled.div`
-    padding: 1rem;
-    width: calc(100% - 2rem);
+    padding: .75rem;
+    padding-top: 0;
+    width: calc(100% - 1.5rem);
   `,
   Item: styled.div`
     width: 100%;
@@ -292,4 +371,9 @@ const S = {
     width: 100%;
     height: 100%;
   `,
+  View: styled.iframe`
+    width: 100%;
+    border: none;
+    height: 80vh;
+  `
 };

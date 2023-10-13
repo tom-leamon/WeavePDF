@@ -40,7 +40,9 @@ library.add(
   fas.faTimes,
   fas.faFileCirclePlus,
   fas.faFileArrowDown,
-  fas.faDownload
+  fas.faDownload,
+  fas.faEye,
+  fas.faEdit
 );
 
 config.autoAddCss = false;
